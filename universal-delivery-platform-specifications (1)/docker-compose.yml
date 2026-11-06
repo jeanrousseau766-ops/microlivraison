@@ -1,0 +1,58 @@
+# Locho — pile de production : application + PostgreSQL + HTTPS (Caddy/Let's Encrypt)
+# Usage :
+#   1. ajoutez dans .env  →  POSTGRES_PASSWORD=un-mot-de-passe-solide
+#                            DOMAIN=votredomaine.fr
+#                            ADMIN_PASSWORD=un-mot-de-passe-admin-solide
+#                            SEED_DEMO=0
+#   2. docker compose up -d --build
+#   3. une fois : docker compose run --rm app npx drizzle-kit push
+#   4. sauvegarde : crontab -e  →  0 3 * * * docker compose exec -T db pg_dump -U locho locho | gzip > /backup/locho-$(date +\%F).sql.gz
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: locho
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Renseignez POSTGRES_PASSWORD dans .env}
+      POSTGRES_DB: locho
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U locho -d locho"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://locho:${POSTGRES_PASSWORD:?Renseignez POSTGRES_PASSWORD dans .env}@db:5432/locho
+      ADMIN_PSEUDO: ${ADMIN_PSEUDO:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Renseignez ADMIN_PASSWORD dans .env}
+      SEED_DEMO: ${SEED_DEMO:-0}
+      NODE_ENV: production
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Renseignez DOMAIN=votredomaine.fr dans .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+
+volumes:
+  pgdata:
+  caddydata:

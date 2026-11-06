@@ -1,0 +1,6 @@
+# HTTPS automatique (certificats Let's Encrypt) devant l'application Next.js.
+# Remplacez l'exemple par votre domaine : DOMAIN=locho.fr (variable passée par docker-compose).
+{$DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy app:3000
+}
